@@ -1,80 +1,49 @@
-﻿using EmployeeChurnAnalysis.Models;
-using Microsoft.ML;
+﻿using Microsoft.ML;
+using EmployeeChurnAnalysis.Models;
 using Microsoft.ML.Data;
-using System.Data;
+using Microsoft.ML.Trainers.FastTree;
+using Microsoft.ML.Transforms;
+using System;
+using System.Linq;
 
 namespace EmployeeChurnAnalysis.ML
 {
     public class ChurnPredictor
     {
-        private readonly MLContext _mlContext;
-
-        public ChurnPredictor()
+        public void TrainAndEvaluate(string mlReadyCsvPath)
         {
-            _mlContext = new MLContext(seed: 42);
-        }
+            var mlContext = new MLContext(seed: 42);
+            var dataView = mlContext.Data.LoadFromTextFile<EmployeeForML>(
+                mlReadyCsvPath,
+                hasHeader: true,
+                separatorChar: ';'
+            );
 
-        /// <summary>
-        /// Обучение модели предсказания оттока
-        /// </summary>
-        public ITransformer TrainModel(IDataView trainingDataView)
-        {
-            // Определение пайплайна обработки данных и обучения
-            var pipeline = _mlContext.Transforms.Categorical.OneHotEncoding("SexEncoded", "Sex")
-                .Append(_mlContext.Transforms.Categorical.OneHotEncoding("WasTraineeEncoded", "WasTrainee"))
-                .Append(_mlContext.Transforms.Concatenate("Features",
-                    "Age", "SexEncoded", "WorkExperience", "WasTraineeEncoded",
-                    "GradeUpChange", "DepartmentChange", "PositionChange",
-                    "VacationDays", "AbsenceDays", "SickLeaveDays",
-                    "Performance2023", "TotalSeniority", "CourseCount"))
-                .Append(_mlContext.BinaryClassification.Trainers.FastTree(
-                    labelColumnName: "Label",
-                    featureColumnName: "Features",
-                    numberOfLeaves: 20,
-                    numberOfTrees: 100));
+            var split = mlContext.Data.TrainTestSplit(dataView, testFraction: 0.2);
 
-            // Обучение модели
-            Console.WriteLine("Обучение модели...");
-            var model = pipeline.Fit(trainingDataView);
-            Console.WriteLine("Модель обучена");
-            return model;
-        }
+            var pipeline = mlContext.Transforms.Categorical.OneHotEncoding("SexEncoded", nameof(EmployeeForML.Sex))
+                .Append(mlContext.Transforms.Categorical.OneHotEncoding("WasTraineeEncoded", nameof(EmployeeForML.WasTrainee)))
+                .Append(mlContext.Transforms.Concatenate("Features",
+                    nameof(EmployeeForML.Age), "SexEncoded", nameof(EmployeeForML.WorkExperience), "WasTraineeEncoded",
+                    nameof(EmployeeForML.GradeUpChange), nameof(EmployeeForML.DepartmentChange), nameof(EmployeeForML.PositionChange),
+                    nameof(EmployeeForML.VacationDays), nameof(EmployeeForML.AbsenceDays), nameof(EmployeeForML.SickLeaveDays),
+                    nameof(EmployeeForML.Performance2023), nameof(EmployeeForML.TotalSeniority), nameof(EmployeeForML.CourseCount)))
+                .Append(mlContext.BinaryClassification.Trainers.FastTree(
+                    labelColumnName: nameof(EmployeeForML.HasLeft),
+                    featureColumnName: "Features"
+                ));
 
-        /// <summary>
-        /// Оценка качества модели
-        /// </summary>
-        public void EvaluateModel(ITransformer model, IDataView testDataView)
-        {
-            var predictions = model.Transform(testDataView);
-            var metrics = _mlContext.BinaryClassification.Evaluate(predictions);
+            var model = pipeline.Fit(split.TrainSet);
 
-            Console.WriteLine("=== Метрики модели ===");
-            Console.WriteLine($"Точность (Accuracy): {metrics.Accuracy:P2}");
-            Console.WriteLine($"AUC: {metrics.AreaUnderRocCurve:P2}");
-            Console.WriteLine($"F1 Score: {metrics.F1Score:P2}");
-            Console.WriteLine($"Положительная точность: {metrics.PositivePrecision:P2}");
-            Console.WriteLine($"Отрицательная точность: {metrics.NegativePrecision:P2}");
-            Console.WriteLine($"Положительная полнота: {metrics.PositiveRecall:P2}");
-            Console.WriteLine($"Отрицательная полнота: {metrics.NegativeRecall:P2}");
-            Console.WriteLine("=== Матрица ошибок ===");
-            Console.WriteLine($"Истинно положительные: {metrics.ConfusionMatrix.TruePositives}");
-            Console.WriteLine($"Ложно положительные: {metrics.ConfusionMatrix.FalsePositives}");
-            Console.WriteLine($"Истинно отрицательные: {metrics.ConfusionMatrix.TrueNegatives}");
-            Console.WriteLine($"Ложно отрицательные: {metrics.ConfusionMatrix.FalseNegatives}");
-        }
+            var predictions = model.Transform(split.TestSet);
+            var metrics = mlContext.BinaryClassification.Evaluate(predictions, labelColumnName: nameof(EmployeeForML.HasLeft));
+            Console.WriteLine($"Accuracy: {metrics.Accuracy:P2}, AUC: {metrics.AreaUnderRocCurve:P2}, F1: {metrics.F1Score:P2}");
 
-        /// <summary>
-        /// Получение важности признаков модели
-        /// </summary>
-        public List<FeatureImportance> GetFeatureImportance(ITransformer model, IDataView dataView)
-        {
-            var permutationMetrics = _mlContext.BinaryClassification.PermutationFeatureImportance(
-                model, dataView, labelColumnName: "Label", permutationCount: 10);
-
-            var featureImportanceMetrics = permutationMetrics
-                .Select((m, i) => new { Index = i, Metrics = m })
-                .OrderByDescending(feature => Math.Abs(feature.Metrics.AreaUnderRocCurve.Mean))
-                .ToList();
+            var permutation = mlContext.BinaryClassification
+                .PermutationFeatureImportance<CalibratedModelParametersBase<FastTreeBinaryModelParameters>>(
+                    ((BinaryPredictionTransformer<CalibratedModelParametersBase<FastTreeBinaryModelParameters>>)model.LastTransformer),
+                    split.TestSet,
+                    labelColumnName: nameof(EmployeeForML.HasLeft));
 
             var featureNames = new[]
             {
@@ -83,77 +52,11 @@ namespace EmployeeChurnAnalysis.ML
                 "VacationDays", "AbsenceDays", "SickLeaveDays",
                 "Performance2023", "TotalSeniority", "CourseCount"
             };
-
-            var result = featureImportanceMetrics
-                .Select(feature => new FeatureImportance
-                {
-                    FeatureName = featureNames[feature.Index],
-                    Importance = feature.Metrics.AreaUnderRocCurve.Mean
-                })
-                .ToList();
-
-            return result;
-        }
-
-        /// <summary>
-        /// Сохранение обученной модели
-        /// </summary>
-        public void SaveModel(ITransformer model, string filePath)
-        {
-            _mlContext.Model.Save(model, null, filePath);
-        }
-
-        /// <summary>
-        /// Загрузка обученной модели
-        /// </summary>
-        public ITransformer LoadModel(string filePath)
-        {
-            return _mlContext.Model.Load(filePath, out var _);
-        }
-
-        /// <summary>
-        /// Предсказание оттока для сотрудника
-        /// </summary>
-        public ChurnPrediction PredictChurn(ITransformer model, EmployeeForML employee)
-        {
-            var predictionEngine = _mlContext.Model.CreatePredictionEngine<EmployeeForML, ChurnPrediction>(model);
-            return predictionEngine.Predict(employee);
-        }
-
-        /// <summary>
-        /// Предсказание оттока для группы сотрудников
-        /// </summary>
-        public List<(Employee Employee, float Risk)> PredictChurnForEmployees(
-            ITransformer model,
-            List<Employee> employees,
-            DataProcessor dataProcessor)
-        {
-            // Подготовка данных
-            var employeeData = dataProcessor.PrepareDataForML(employees);
-
-            // Создание предсказателя
-            var predictionEngine = _mlContext.Model.CreatePredictionEngine<EmployeeForML, ChurnPrediction>(model);
-
-            // Выполнение предсказаний
-            var results = new List<(Employee Employee, float Risk)>();
-
-            foreach (var employee in employees)
+            Console.WriteLine("Feature importances:");
+            for (int i = 0; i < permutation.Length && i < featureNames.Length; i++)
             {
-                var data = employeeData.FirstOrDefault(e => e.PersonId == employee.PersonId);
-                if (data != null)
-                {
-                    var prediction = predictionEngine.Predict(data);
-                    results.Add((employee, prediction.Probability));
-                }
+                Console.WriteLine($"{featureNames[i]}: {permutation[i].AreaUnderRocCurve.Mean:F4}");
             }
-
-            return results.OrderByDescending(r => r.Risk).ToList();
         }
-    }
-
-    public class FeatureImportance
-    {
-        public string FeatureName { get; set; } = string.Empty;
-        public double Importance { get; set; }
     }
 }

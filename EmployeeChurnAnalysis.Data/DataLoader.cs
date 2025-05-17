@@ -1,245 +1,106 @@
-﻿using CsvHelper;
-using CsvHelper.Configuration;
+﻿using System.Collections.Generic;
 using EmployeeChurnAnalysis.Models;
-using System.Formats.Asn1;
+using CsvHelper;
+using CsvHelper.Configuration;
 using System.Globalization;
+using System.IO;
+using System.Linq;
 
 namespace EmployeeChurnAnalysis.Data
 {
     public class DataLoader
     {
-        /// <summary>
-        /// Загрузка действующих сотрудников из файла
-        /// </summary>
-        public List<Employee> LoadCurrentEmployees(string filePath)
+        public List<EmployeeForML> LoadEmployees(string path)
         {
-            using var reader = new StreamReader(filePath);
-            using var csv = new CsvReader(reader, new CsvConfiguration(CultureInfo.InvariantCulture)
+            var config = new CsvConfiguration(CultureInfo.InvariantCulture)
             {
                 Delimiter = ";",
-                HasHeaderRecord = true
-            });
+                MissingFieldFound = null,
+                HeaderValidated = null,
+                IgnoreBlankLines = true
+            };
 
-            var employees = new List<Employee>();
+            using var reader = new StreamReader(path);
+            using var csv = new CsvReader(reader, config);
+
+            var records = new List<EmployeeForML>();
+            csv.Read();
+            csv.ReadHeader();
+            var header = csv.HeaderRecord;
 
             while (csv.Read())
             {
-                try
+                var e = new EmployeeForML
                 {
-                    var employee = new Employee
-                    {
-                        PersonId = csv.GetField<string>("PERSON_ID"),
-                        BirthDate = DateTime.Parse(csv.GetField<string>("BIRTH_DT")),
-                        Sex = csv.GetField<int>("SEX"),
-                        ReceptionDate = DateTime.Parse(csv.GetField<string>("RECEPTION_DT")),
-                        City = csv.GetField<string>("CITY"),
-                        Grade = csv.GetField<string>("GRADE"),
-                        HasLeft = false
-                    };
-
-                    employees.Add(employee);
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Ошибка при чтении записи: {ex.Message}");
-                }
+                    PersonId = csv.GetField("PERSON_ID"),
+                    Age = ParseFloat(csv, "Возраст"),
+                    Sex = ParseSex(csv, "Пол", "SEX"),
+                    WorkExperience = ParseWorkExperience(csv, "Дата приема"),
+                    WasTrainee = ParseTrainee(csv, "WAS_TRAINEE"),
+                    GradeUpChange = ParseFloat(csv, "GR_UP_CHANGE"),
+                    DepartmentChange = ParseFloat(csv, "C_C_CHANGE"),
+                    PositionChange = ParseFloat(csv, "POS_D_CHANGE"),
+                    VacationDays = ParseFloat(csv, "VACATION_COUNT_2024"),
+                    AbsenceDays = ParseFloat(csv, "DAYS_WITHOUT_VALID_REASONS"),
+                    SickLeaveDays = ParseFloat(csv, "ILL_DAYS"),
+                    Performance2023 = ParseFloat(csv, "2023"),
+                    TotalSeniority = ParseFloat(csv, "FULL_SENIORITY"),
+                    CourseCount = SumCourses(csv, header),
+                    HasLeft = !string.IsNullOrWhiteSpace(csv.GetField("Дата увольнения")),
+                    Department = csv.GetField("Отдел"),
+                    LeaveReason = csv.GetField("Причины увольнения"),
+                    VoluntaryType = csv.GetField("VOLUNTARY_TYPE")
+                };
+                records.Add(e);
             }
-
-            return employees;
+            return records;
         }
 
-        /// <summary>
-        /// Загрузка уволенных сотрудников из файла
-        /// </summary>
-        public List<Employee> LoadFormerEmployees(string filePath, string reasonsFilePath)
+        private float ParseFloat(CsvReader csv, string field)
         {
-            // Загрузка справочника причин увольнения
-            var reasonsDict = LoadReasonsDictionary(reasonsFilePath);
-
-            using var reader = new StreamReader(filePath);
-            using var csv = new CsvReader(reader, new CsvConfiguration(CultureInfo.InvariantCulture)
-            {
-                Delimiter = ";",
-                HasHeaderRecord = true
-            });
-
-            var employees = new List<Employee>();
-
-            while (csv.Read())
-            {
-                try
-                {
-                    var reason = csv.GetField<string>("Причины увольнения");
-                    var isVoluntary = reasonsDict.ContainsKey(reason) &&
-                                     reasonsDict[reason] == "Voluntary";
-
-                    var employee = new Employee
-                    {
-                        PersonId = csv.GetField<string>("PERSON_ID"),
-                        LeaveDate = DateTime.Parse(csv.GetField<string>("Дата операции")),
-                        LeaveReason = reason,
-                        IsVoluntary = isVoluntary,
-                        Department = csv.GetField<string>("Отдел"),
-                        Grade = csv.GetField<string>("Грейд"),
-                        HasLeft = true
-                    };
-
-                    employees.Add(employee);
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Ошибка при чтении записи: {ex.Message}");
-                }
-            }
-
-            return employees;
+            var val = csv.GetField(field);
+            if (float.TryParse(val, out float f)) return f;
+            return 0f;
         }
 
-        /// <summary>
-        /// Загрузка информации о прохождении стажировки
-        /// </summary>
-        public Dictionary<string, bool> LoadTraineeInfo(string filePath)
+        private float ParseSex(CsvReader csv, string field1, string field2)
         {
-            using var reader = new StreamReader(filePath);
-            using var csv = new CsvReader(reader, new CsvConfiguration(CultureInfo.InvariantCulture)
-            {
-                Delimiter = ";",
-                HasHeaderRecord = true
-            });
-
-            var result = new Dictionary<string, bool>();
-
-            while (csv.Read())
-            {
-                try
-                {
-                    var personId = csv.GetField<string>("PERSON_ID");
-                    var wasTrainee = csv.GetField<string>("WAS_TRAINEE") == "YES";
-                    result[personId] = wasTrainee;
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Ошибка при чтении записи: {ex.Message}");
-                }
-            }
-
-            return result;
+            var val = csv.GetField(field1);
+            if (val == "М" || val == "0") return 0f;
+            if (val == "Ж" || val == "1") return 1f;
+            val = csv.GetField(field2);
+            if (val == "0") return 0f;
+            if (val == "1") return 1f;
+            return 0f;
         }
 
-        /// <summary>
-        /// Загрузка дополнительных сведений о сотрудниках
-        /// </summary>
-        public void LoadAdditionalInfo(string filePath, List<Employee> employees)
+        private float ParseWorkExperience(CsvReader csv, string field)
         {
-            var employeeDict = employees.ToDictionary(e => e.PersonId);
-
-            using var reader = new StreamReader(filePath);
-            using var csv = new CsvReader(reader, new CsvConfiguration(CultureInfo.InvariantCulture)
-            {
-                Delimiter = ";",
-                HasHeaderRecord = true
-            });
-
-            while (csv.Read())
-            {
-                try
-                {
-                    var personId = csv.GetField<string>("PERSON_ID");
-
-                    if (employeeDict.TryGetValue(personId, out var employee))
-                    {
-                        employee.MaritalStatus = csv.GetField<string>("Состояние в браке");
-                        employee.MilitaryService = csv.GetField<string>("Отношение к военной службе");
-                        employee.Education = csv.GetField<string>("Образование");
-                        employee.Age = csv.GetField<int>("Возраст");
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Ошибка при чтении записи: {ex.Message}");
-                }
-            }
+            var val = csv.GetField(field);
+            if (DateTime.TryParse(val, out DateTime dt))
+                return (float)(DateTime.Parse("2024-12-31") - dt).TotalDays;
+            return 0f;
         }
 
-        // Аналогичные методы для других файлов...
-
-        /// <summary>
-        /// Загрузка словаря причин увольнения
-        /// </summary>
-        private Dictionary<string, string> LoadReasonsDictionary(string filePath)
+        private float ParseTrainee(CsvReader csv, string field)
         {
-            using var reader = new StreamReader(filePath);
-            using var csv = new CsvReader(reader, new CsvConfiguration(CultureInfo.InvariantCulture)
-            {
-                Delimiter = ";",
-                HasHeaderRecord = true
-            });
-
-            var result = new Dictionary<string, string>();
-
-            while (csv.Read())
-            {
-                try
-                {
-                    var reason = csv.GetField<string>("Причины увольнения");
-                    var type = csv.GetField<string>("Voluntary / Non-voluntary");
-                    result[reason] = type;
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Ошибка при чтении записи: {ex.Message}");
-                }
-            }
-
-            return result;
+            var val = csv.GetField(field);
+            if (val == "YES" || val == "1") return 1f;
+            return 0f;
         }
 
-        /// <summary>
-        /// Объединение данных сотрудников из разных источников
-        /// </summary>
-        public List<Employee> MergeEmployeeData(
-            List<Employee> currentEmployees,
-            List<Employee> formerEmployees,
-            Dictionary<string, bool> traineeInfo,
-            // Другие параметры для остальных данных
-            )
+        private float SumCourses(CsvReader csv, string[] header)
         {
-            var allEmployees = new List<Employee>();
-
-            // Добавляем действующих сотрудников
-            allEmployees.AddRange(currentEmployees);
-
-            // Добавляем уволенных сотрудников, если их нет среди действующих
-            foreach (var former in formerEmployees)
+            float sum = 0f;
+            foreach (var h in header)
             {
-                if (!allEmployees.Any(e => e.PersonId == former.PersonId))
+                if (h.StartsWith("COURSES_"))
                 {
-                    allEmployees.Add(former);
-                }
-                else
-                {
-                    // Обновляем информацию о сотруднике, если он уже есть в списке
-                    var existing = allEmployees.First(e => e.PersonId == former.PersonId);
-                    existing.HasLeft = true;
-                    existing.LeaveDate = former.LeaveDate;
-                    existing.LeaveReason = former.LeaveReason;
-                    existing.IsVoluntary = former.IsVoluntary;
-                    existing.Department = former.Department;
+                    var val = csv.GetField(h);
+                    if (float.TryParse(val, out float f)) sum += f;
                 }
             }
-
-            // Добавляем информацию о прохождении стажировки
-            foreach (var employee in allEmployees)
-            {
-                if (traineeInfo.TryGetValue(employee.PersonId, out var wasTrainee))
-                {
-                    employee.WasTrainee = wasTrainee;
-                }
-            }
-
-            // Добавление других данных...
-
-            return allEmployees;
+            return sum;
         }
     }
 }

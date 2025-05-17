@@ -1,106 +1,65 @@
-﻿using CsvHelper;
+﻿using System.Collections.Generic;
+using System.IO;
+using CsvHelper;
 using CsvHelper.Configuration;
 using EmployeeChurnAnalysis.Models;
-using Microsoft.ML;
-using System.Data;
 using System.Globalization;
+using System.Linq;
+using System;
 
 namespace EmployeeChurnAnalysis.Data
 {
     public class DataProcessor
     {
-        /// <summary>
-        /// Подготовка данных сотрудников для машинного обучения
-        /// </summary>
-        public List<EmployeeForML> PrepareDataForML(List<Employee> employees)
-        {
-            return employees.Select(e => new EmployeeForML
-            {
-                PersonId = e.PersonId,
-                Age = e.Age,
-                Sex = e.Sex,
-                WorkExperience = (float)((DateTime.Now - e.ReceptionDate).TotalDays),
-                WasTrainee = e.WasTrainee ? 1f : 0f,
-                GradeUpChange = e.GradeUpChange,
-                DepartmentChange = e.DepartmentChange,
-                PositionChange = e.PositionChange,
-                VacationDays = e.VacationDays,
-                AbsenceDays = e.AbsenceDays,
-                SickLeaveDays = e.SickLeaveDays,
-                Performance2023 = e.Performance2023 ?? 0f,
-                TotalSeniority = e.TotalSeniority,
-                CourseCount = e.CoursesByMonth.Values.Sum(),
-                HasLeft = e.HasLeft
-            }).ToList();
-        }
-
-        /// <summary>
-        /// Сохранение подготовленных данных в CSV файл
-        /// </summary>
         public void SaveProcessedData(List<EmployeeForML> data, string filePath)
         {
+            var config = new CsvConfiguration(CultureInfo.InvariantCulture)
+            {
+                Delimiter = ";"
+            };
             using var writer = new StreamWriter(filePath);
-            using var csv = new CsvWriter(writer, new CsvConfiguration(CultureInfo.InvariantCulture));
-
+            using var csv = new CsvWriter(writer, config);
             csv.WriteRecords(data);
         }
 
-        /// <summary>
-        /// Загрузка данных в формат IDataView для ML.NET
-        /// </summary>
-        public IDataView LoadDataView(MLContext mlContext, string filePath)
+        public void TestHypotheses(List<EmployeeForML> data)
         {
-            return mlContext.Data.LoadFromTextFile<EmployeeForML>(
-                filePath,
-                hasHeader: true,
-                separatorChar: ',');
-        }
+            var trainee = data.Where(e => e.WasTrainee == 1f).ToList();
+            var notTrainee = data.Where(e => e.WasTrainee == 0f).ToList();
+            var churnTrainee = trainee.Count(e => e.HasLeft) / (float)trainee.Count();
+            var churnNotTrainee = notTrainee.Count(e => e.HasLeft) / (float)notTrainee.Count();
+            Console.WriteLine($"Отток среди стажеров: {churnTrainee:P2}, среди не-стажеров: {churnNotTrainee:P2}");
 
-        /// <summary>
-        /// Разделение данных на обучающую и тестовую выборки
-        /// </summary>
-        public (IDataView TrainSet, IDataView TestSet) SplitData(MLContext mlContext, IDataView dataView)
-        {
-            var dataSplit = mlContext.Data.TrainTestSplit(dataView, testFraction: 0.2);
-            return (dataSplit.TrainSet, dataSplit.TestSet);
-        }
-
-        /// <summary>
-        /// Анализ данных об оттоке по месяцам
-        /// </summary>
-        public Dictionary<int, int> GetChurnByMonth(List<Employee> employees)
-        {
-            return employees
-                .Where(e => e.HasLeft && e.LeaveDate.HasValue)
-                .GroupBy(e => e.LeaveDate.Value.Month)
-                .OrderBy(g => g.Key)
-                .ToDictionary(g => g.Key, g => g.Count());
-        }
-
-        /// <summary>
-        /// Анализ причин оттока
-        /// </summary>
-        public Dictionary<string, int> GetChurnReasons(List<Employee> employees)
-        {
-            return employees
-                .Where(e => e.HasLeft)
+            var reasons = data.Where(e => e.HasLeft)
                 .GroupBy(e => e.LeaveReason)
-                .OrderByDescending(g => g.Count())
-                .ToDictionary(g => g.Key, g => g.Count());
+                .Select(g => new { Reason = g.Key, Count = g.Count() })
+                .OrderByDescending(g => g.Count)
+                .ToList();
+            Console.WriteLine("Топ причин оттока:");
+            foreach (var r in reasons.Take(5))
+                Console.WriteLine($"{r.Reason ?? "Не указано"}: {r.Count}");
+
+            var byDept = data.GroupBy(e => e.Department)
+                .Select(g => new
+                {
+                    Department = g.Key,
+                    ChurnRate = g.Count(e => e.HasLeft) / (float)g.Count(),
+                    Count = g.Count()
+                })
+                .OrderByDescending(g => g.ChurnRate)
+                .ToList();
+            Console.WriteLine("Отток по отделам:");
+            foreach (var d in byDept)
+                Console.WriteLine($"{d.Department ?? "Не указано"}: {d.ChurnRate:P2} (n={d.Count})");
+
+            var avgCoursesLeft = data.Where(e => e.HasLeft).Average(e => e.CourseCount);
+            var avgCoursesStayed = data.Where(e => !e.HasLeft).Average(e => e.CourseCount);
+            Console.WriteLine($"Среднее число курсов (ушедшие): {avgCoursesLeft:F2}, (оставшиеся): {avgCoursesStayed:F2}");
+
+            var avgPerfLeft = data.Where(e => e.HasLeft).Average(e => e.Performance2023);
+            var avgPerfStayed = data.Where(e => !e.HasLeft).Average(e => e.Performance2023);
+            Console.WriteLine($"Средняя оценка 2023 (ушедшие): {avgPerfLeft:F2}, (оставшиеся): {avgPerfStayed:F2}");
         }
 
-        /// <summary>
-        /// Анализ оттока по отделам
-        /// </summary>
-        public Dictionary<string, double> GetChurnRateByDepartment(List<Employee> employees)
-        {
-            return employees
-                .GroupBy(e => e.Department)
-                .Where(g => g.Count() >= 5) // Минимальное количество сотрудников для расчета
-                .ToDictionary(
-                    g => g.Key,
-                    g => Math.Round((double)g.Count(e => e.HasLeft) / g.Count() * 100, 2)
-                );
-        }
     }
 }
