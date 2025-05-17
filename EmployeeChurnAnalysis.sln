@@ -15,6 +15,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EmployeeChurnAnalysis.ML", 
 		{AB5438B6-6618-F093-CE6F-BD18F90E64D6} = {AB5438B6-6618-F093-CE6F-BD18F90E64D6}
 	EndProjectSection
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EmployeeChurnAnalysis.Console", "EmployeeChurnAnalysis.Console\EmployeeChurnAnalysis.Console.csproj", "{CA5C3F93-561E-4451-8D60-2365971DD2FC}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -33,6 +35,10 @@ Global
 		{444B81A0-682F-41D1-BBC3-5744680849EB}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{444B81A0-682F-41D1-BBC3-5744680849EB}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{444B81A0-682F-41D1-BBC3-5744680849EB}.Release|Any CPU.Build.0 = Release|Any CPU
+		{CA5C3F93-561E-4451-8D60-2365971DD2FC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{CA5C3F93-561E-4451-8D60-2365971DD2FC}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{CA5C3F93-561E-4451-8D60-2365971DD2FC}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{CA5C3F93-561E-4451-8D60-2365971DD2FC}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
