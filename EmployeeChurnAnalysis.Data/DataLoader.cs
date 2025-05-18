@@ -1,10 +1,11 @@
-﻿using System.Collections.Generic;
-using EmployeeChurnAnalysis.Models;
-using CsvHelper;
-using CsvHelper.Configuration;
+﻿using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using CsvHelper;
+using CsvHelper.Configuration;
+using EmployeeChurnAnalysis.Models;
 
 namespace EmployeeChurnAnalysis.Data
 {
@@ -49,7 +50,8 @@ namespace EmployeeChurnAnalysis.Data
                     HasLeft = !string.IsNullOrWhiteSpace(csv.GetField("Дата увольнения")),
                     Department = csv.GetField("Отдел"),
                     LeaveReason = csv.GetField("Причины увольнения"),
-                    VoluntaryType = csv.GetField("VOLUNTARY_TYPE")
+                    VoluntaryType = csv.GetField("VOLUNTARY_TYPE"),
+                    LeftAfterBonus = CalcLeftAfterBonus(csv.GetField("Дата увольнения"))
                 };
                 records.Add(e);
             }
@@ -59,7 +61,7 @@ namespace EmployeeChurnAnalysis.Data
         private float ParseFloat(CsvReader csv, string field)
         {
             var val = csv.GetField(field);
-            if (float.TryParse(val, out float f)) return f;
+            if (float.TryParse(val, NumberStyles.Any, CultureInfo.InvariantCulture, out float f)) return f;
             return 0f;
         }
 
@@ -78,7 +80,7 @@ namespace EmployeeChurnAnalysis.Data
         {
             var val = csv.GetField(field);
             if (DateTime.TryParse(val, out DateTime dt))
-                return (float)(DateTime.Parse("2024-12-31") - dt).TotalDays;
+                return (float)(new DateTime(2024, 12, 31) - dt).TotalDays;
             return 0f;
         }
 
@@ -97,10 +99,20 @@ namespace EmployeeChurnAnalysis.Data
                 if (h.StartsWith("COURSES_"))
                 {
                     var val = csv.GetField(h);
-                    if (float.TryParse(val, out float f)) sum += f;
+                    if (float.TryParse(val, NumberStyles.Any, CultureInfo.InvariantCulture, out float f)) sum += f;
                 }
             }
             return sum;
+        }
+
+        private bool CalcLeftAfterBonus(string leaveDateStr)
+        {
+            if (DateTime.TryParse(leaveDateStr, out DateTime leaveDate))
+            {
+                var bonusDate = new DateTime(leaveDate.Year, 4, 1);
+                return leaveDate >= bonusDate;
+            }
+            return false;
         }
     }
 }

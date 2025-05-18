@@ -1,9 +1,9 @@
-﻿using Microsoft.ML;
+using Microsoft.ML;
 using Microsoft.ML.Data;
 using System;
 using System.Collections.Generic;
 
-namespace EmployeeChurnAnalysis.ML
+namespace EmployeeChurnAnalysis.Models
 {
     public class ChurnInput
     {

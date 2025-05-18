@@ -9,7 +9,6 @@
 
     <ItemGroup>
       <ProjectReference Include="..\EmployeeChurnAnalysis.Data\EmployeeChurnAnalysis.Data.csproj" />
-      <ProjectReference Include="..\EmployeeChurnAnalysis.ML\EmployeeChurnAnalysis.ML.csproj" />
     </ItemGroup>
 
 </Project>

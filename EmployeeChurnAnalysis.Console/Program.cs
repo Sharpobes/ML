@@ -2,7 +2,9 @@
 using System.IO;
 using Microsoft.ML;
 using EmployeeChurnAnalysis.Data;
-using EmployeeChurnAnalysis.ML;
+using EmployeeChurnAnalysis.Models;
+using Microsoft.ML.Trainers;
+using Microsoft.ML.Transforms;
 
 namespace EmployeeChurnAnalysis.Console
 {
@@ -29,11 +31,11 @@ namespace EmployeeChurnAnalysis.Console
                 var split = mlContext.Data.TrainTestSplit(dataView, testFraction: 0.2);
 
                 var predictor = new ChurnPredictor();
-                var model = predictor.TrainModel(split.TrainSet, mlContext);
-                predictor.EvaluateModel(model, split.TestSet, mlContext);
-                predictor.ShowFeatureImportance(model, split.TrainSet, mlContext);
+                var ovaModel = predictor.TrainModel(split.TrainSet, mlContext);
+                predictor.ShowFeatureImportance(ovaModel, split.TrainSet, mlContext);
+                predictor.ShowFeatureImportance(ovaModel, split.TrainSet, mlContext);
                 predictor.TestHypotheses(split.TrainSet, mlContext);
-                predictor.SaveModel(model, mlContext, modelPath, split.TrainSet.Schema);
+                predictor.SaveModel(ovaModel, mlContext, modelPath, split.TrainSet.Schema);
                 System.Console.WriteLine($"\nМодель сохранена в {modelPath}");
             }
             catch (Exception ex)

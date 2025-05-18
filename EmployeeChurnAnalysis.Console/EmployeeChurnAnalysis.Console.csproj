@@ -20,15 +20,14 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<ProjectReference Include="..\EmployeeChurnAnalysis.Models\EmployeeChurnAnalysis.Models.csproj" />
-		<ProjectReference Include="..\EmployeeChurnAnalysis.Data\EmployeeChurnAnalysis.Data.csproj" />
-		<ProjectReference Include="..\EmployeeChurnAnalysis.ML\EmployeeChurnAnalysis.ML.csproj" />
-	</ItemGroup>
-
-	<ItemGroup>
 		<None Update="Data\**\*.*">
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 		</None>
+	</ItemGroup>
+
+	<ItemGroup>
+	  <ProjectReference Include="..\EmployeeChurnAnalysis.Data\EmployeeChurnAnalysis.Data.csproj" />
+	  <ProjectReference Include="..\EmployeeChurnAnalysis.Models\EmployeeChurnAnalysis.Models.csproj" />
 	</ItemGroup>
 
 </Project>

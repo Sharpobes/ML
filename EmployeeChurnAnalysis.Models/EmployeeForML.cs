@@ -22,5 +22,6 @@ namespace EmployeeChurnAnalysis.Models
         public string Department { get; set; }
         public string LeaveReason { get; set; }
         public string VoluntaryType { get; set; }
+        public bool LeftAfterBonus { get; set; }
     }
 }
