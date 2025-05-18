@@ -31,7 +31,8 @@ namespace EmployeeChurnAnalysis.Console
                 var predictor = new ChurnPredictor();
                 var model = predictor.TrainModel(split.TrainSet, mlContext);
                 predictor.EvaluateModel(model, split.TestSet, mlContext);
-
+                predictor.ShowFeatureImportance(model, split.TrainSet, mlContext);
+                predictor.TestHypotheses(split.TrainSet, mlContext);
                 predictor.SaveModel(model, mlContext, modelPath, split.TrainSet.Schema);
                 System.Console.WriteLine($"\nМодель сохранена в {modelPath}");
             }
