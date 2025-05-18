@@ -14,6 +14,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EmployeeChurnAnalysis.Conso
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EmployeeChurnAnalysis.ML", "EmployeeChurnAnalysis.ML\EmployeeChurnAnalysis.ML.csproj", "{732795F0-3EA7-E449-0103-04C1F629A633}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ModelTester", "ModelTester\ModelTester.csproj", "{502E1AA7-A177-4331-B2FB-4FAB8DA232A4}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -36,6 +38,10 @@ Global
 		{732795F0-3EA7-E449-0103-04C1F629A633}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{732795F0-3EA7-E449-0103-04C1F629A633}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{732795F0-3EA7-E449-0103-04C1F629A633}.Release|Any CPU.Build.0 = Release|Any CPU
+		{502E1AA7-A177-4331-B2FB-4FAB8DA232A4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{502E1AA7-A177-4331-B2FB-4FAB8DA232A4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{502E1AA7-A177-4331-B2FB-4FAB8DA232A4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{502E1AA7-A177-4331-B2FB-4FAB8DA232A4}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

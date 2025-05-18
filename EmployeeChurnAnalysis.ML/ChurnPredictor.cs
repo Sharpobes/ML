@@ -1,62 +1,68 @@
 ﻿using Microsoft.ML;
-using EmployeeChurnAnalysis.Models;
 using Microsoft.ML.Data;
-using Microsoft.ML.Trainers.FastTree;
-using Microsoft.ML.Transforms;
 using System;
-using System.Linq;
+using System.Collections.Generic;
 
 namespace EmployeeChurnAnalysis.ML
 {
+    public class ChurnInput
+    {
+        [LoadColumn(0)] public string PERSON_ID;
+        [LoadColumn(1)] public string SEX;
+        [LoadColumn(2)] public float Age;
+        [LoadColumn(3)] public string GRADE;
+        [LoadColumn(4)] public string WAS_TRAINEE;
+        [LoadColumn(5)] public float FULL_SENIORITY;
+        [LoadColumn(6)] public float ILL_DAYS;
+        [LoadColumn(7)] public float DAYS_WITHOUT_VALID_REASONS;
+        [LoadColumn(8)] public float VACATION_COUNT_2024;
+        [LoadColumn(9)] public float YEAR_2022;
+        [LoadColumn(10)] public float YEAR_2023;
+        [LoadColumn(11)] public float COURSES_07;
+        [LoadColumn(12)] public float COURSES_08;
+        [LoadColumn(13)] public float COURSES_09;
+        [LoadColumn(14)] public float COURSES_10;
+        [LoadColumn(15)] public float COURSES_11;
+        [LoadColumn(16)] public float COURSES_12;
+
+        [LoadColumn(17)] public string VOLUNTARY_TYPE;
+    }
+
     public class ChurnPredictor
     {
-        public void TrainAndEvaluate(string mlReadyCsvPath)
+        public ITransformer TrainModel(IDataView trainData, MLContext mlContext)
         {
-            var mlContext = new MLContext(seed: 42);
-            var dataView = mlContext.Data.LoadFromTextFile<EmployeeForML>(
-                mlReadyCsvPath,
-                hasHeader: true,
-                separatorChar: ';'
-            );
-
-            var split = mlContext.Data.TrainTestSplit(dataView, testFraction: 0.2);
-
-            var pipeline = mlContext.Transforms.Categorical.OneHotEncoding("SexEncoded", nameof(EmployeeForML.Sex))
-                .Append(mlContext.Transforms.Categorical.OneHotEncoding("WasTraineeEncoded", nameof(EmployeeForML.WasTrainee)))
+            var pipeline = mlContext.Transforms.Conversion.MapValueToKey("Label", nameof(ChurnInput.VOLUNTARY_TYPE))
+                .Append(mlContext.Transforms.Categorical.OneHotEncoding("SEX"))
+                .Append(mlContext.Transforms.Categorical.OneHotEncoding("GRADE"))
+                .Append(mlContext.Transforms.Categorical.OneHotEncoding("WAS_TRAINEE"))
                 .Append(mlContext.Transforms.Concatenate("Features",
-                    nameof(EmployeeForML.Age), "SexEncoded", nameof(EmployeeForML.WorkExperience), "WasTraineeEncoded",
-                    nameof(EmployeeForML.GradeUpChange), nameof(EmployeeForML.DepartmentChange), nameof(EmployeeForML.PositionChange),
-                    nameof(EmployeeForML.VacationDays), nameof(EmployeeForML.AbsenceDays), nameof(EmployeeForML.SickLeaveDays),
-                    nameof(EmployeeForML.Performance2023), nameof(EmployeeForML.TotalSeniority), nameof(EmployeeForML.CourseCount)))
-                .Append(mlContext.BinaryClassification.Trainers.FastTree(
-                    labelColumnName: nameof(EmployeeForML.HasLeft),
-                    featureColumnName: "Features"
-                ));
+                    "SEX", "GRADE", "WAS_TRAINEE", "Age",
+                    "FULL_SENIORITY", "ILL_DAYS", "DAYS_WITHOUT_VALID_REASONS",
+                    "VACATION_COUNT_2024", "YEAR_2022", "YEAR_2023",
+                    "COURSES_07", "COURSES_08", "COURSES_09",
+                    "COURSES_10", "COURSES_11", "COURSES_12"))
+                .Append(mlContext.Transforms.NormalizeMinMax("Features"))
+                .Append(mlContext.MulticlassClassification.Trainers.OneVersusAll(
+                    mlContext.BinaryClassification.Trainers.SdcaLogisticRegression()))
+                .Append(mlContext.Transforms.Conversion.MapKeyToValue("PredictedLabel"));
 
-            var model = pipeline.Fit(split.TrainSet);
+            return pipeline.Fit(trainData);
+        }
 
-            var predictions = model.Transform(split.TestSet);
-            var metrics = mlContext.BinaryClassification.Evaluate(predictions, labelColumnName: nameof(EmployeeForML.HasLeft));
-            Console.WriteLine($"Accuracy: {metrics.Accuracy:P2}, AUC: {metrics.AreaUnderRocCurve:P2}, F1: {metrics.F1Score:P2}");
+        public void EvaluateModel(ITransformer model, IDataView testData, MLContext mlContext)
+        {
+            var predictions = model.Transform(testData);
+            var metrics = mlContext.MulticlassClassification.Evaluate(predictions);
 
-            var permutation = mlContext.BinaryClassification
-                .PermutationFeatureImportance<CalibratedModelParametersBase<FastTreeBinaryModelParameters>>(
-                    ((BinaryPredictionTransformer<CalibratedModelParametersBase<FastTreeBinaryModelParameters>>)model.LastTransformer),
-                    split.TestSet,
-                    labelColumnName: nameof(EmployeeForML.HasLeft));
+            Console.WriteLine($"Macro accuracy: {metrics.MacroAccuracy:P2}");
+            Console.WriteLine($"Micro accuracy: {metrics.MicroAccuracy:P2}");
+            Console.WriteLine($"Log loss: {metrics.LogLoss:F4}");
+        }
 
-            var featureNames = new[]
-            {
-                "Age", "Sex", "WorkExperience", "WasTrainee",
-                "GradeUpChange", "DepartmentChange", "PositionChange",
-                "VacationDays", "AbsenceDays", "SickLeaveDays",
-                "Performance2023", "TotalSeniority", "CourseCount"
-            };
-            Console.WriteLine("Feature importances:");
-            for (int i = 0; i < permutation.Length && i < featureNames.Length; i++)
-            {
-                Console.WriteLine($"{featureNames[i]}: {permutation[i].AreaUnderRocCurve.Mean:F4}");
-            }
+        public void SaveModel(ITransformer model, MLContext mlContext, string path, DataViewSchema schema)
+        {
+            mlContext.Model.Save(model, schema, path);
         }
     }
 }

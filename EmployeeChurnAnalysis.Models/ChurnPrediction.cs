@@ -1,12 +1,10 @@
 ﻿using Microsoft.ML.Data;
 
-namespace EmployeeChurnAnalysis.Models
+namespace EmployeeChurnAnalysis.ML
 {
     public class ChurnPrediction
     {
-        [ColumnName("PredictedLabel")]
-        public bool PredictedLabel { get; set; }
-        public float Probability { get; set; }
-        public float Score { get; set; }
+        [ColumnName("PredictedLabel")] public string Prediction;
+        public float[] Score;
     }
 }

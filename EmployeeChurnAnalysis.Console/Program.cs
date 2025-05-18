@@ -1,9 +1,8 @@
-﻿using EmployeeChurnAnalysis.Data;
-using EmployeeChurnAnalysis.Models;
-using EmployeeChurnAnalysis.ML;
-using System;
+﻿using System;
 using System.IO;
-using System.Linq;
+using Microsoft.ML;
+using EmployeeChurnAnalysis.Data;
+using EmployeeChurnAnalysis.ML;
 
 namespace EmployeeChurnAnalysis.Console
 {
@@ -11,26 +10,39 @@ namespace EmployeeChurnAnalysis.Console
     {
         static void Main(string[] args)
         {
-            string csvPath = @"E:\hakaton_tele2\IT HUB Data\csv\final_employees_filtered.csv";
-            string mlReadyCsvPath = @"E:\hakaton_tele2\IT HUB Data\csv\ml_ready.csv";
+            System.Console.WriteLine("===== Анализ оттока сотрудников =====");
 
-            var dataLoader = new DataLoader();
-            var dataProcessor = new DataProcessor();
-            var churnPredictor = new ChurnPredictor();
+            var dataPath = @"E:\hakaton_tele2\IT HUB Data\csv\final_employees_filtered.csv";
+            var modelPath = Path.Combine(Environment.CurrentDirectory, "Models", "ChurnModel.zip");
 
-            // 1. Загрузка данных
-            var employees = dataLoader.LoadEmployees(csvPath);
+            Directory.CreateDirectory(Path.GetDirectoryName(modelPath));
 
-            // 2. Сохранение подготовленных данных (если нужно)
-            dataProcessor.SaveProcessedData(employees, mlReadyCsvPath);
+            try
+            {
+                var mlContext = new MLContext(seed: 42);
 
-            // 3. Анализ гипотез
-            dataProcessor.TestHypotheses(employees);
+                var dataView = mlContext.Data.LoadFromTextFile<ChurnInput>(
+                    path: dataPath,
+                    hasHeader: true,
+                    separatorChar: ';');
 
-            // 4. Обучение и анализ модели
-            churnPredictor.TrainAndEvaluate(mlReadyCsvPath);
+                var split = mlContext.Data.TrainTestSplit(dataView, testFraction: 0.2);
 
-            Console.WriteLine("Анализ завершён.");
+                var predictor = new ChurnPredictor();
+                var model = predictor.TrainModel(split.TrainSet, mlContext);
+                predictor.EvaluateModel(model, split.TestSet, mlContext);
+
+                predictor.SaveModel(model, mlContext, modelPath, split.TrainSet.Schema);
+                System.Console.WriteLine($"\nМодель сохранена в {modelPath}");
+            }
+            catch (Exception ex)
+            {
+                System.Console.WriteLine($"Ошибка: {ex.Message}");
+                System.Console.WriteLine(ex.StackTrace);
+            }
+
+            System.Console.WriteLine("\nНажмите любую клавишу для завершения...");
+            System.Console.ReadKey();
         }
     }
 }
