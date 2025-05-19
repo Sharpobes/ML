@@ -3,11 +3,9 @@ using Microsoft.ML.Data;
 using Microsoft.ML.Transforms;
 using Microsoft.ML.Trainers;
 using Microsoft.ML.Trainers.FastTree;
-using Microsoft.ML.MulticlassClassification;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-
 namespace EmployeeChurnAnalysis.Models
 {
     public class ChurnPredictor
@@ -21,66 +19,55 @@ namespace EmployeeChurnAnalysis.Models
 
         public ITransformer TrainModel(IDataView trainData, MLContext mlContext)
         {
-            var pipeline = mlContext.Transforms.Conversion.MapValueToKey("Label", nameof(ChurnInput.VOLUNTARY_TYPE))
-                .Append(mlContext.Transforms.Categorical.OneHotEncoding("SEX"))
+            var pipeline = mlContext.Transforms.Categorical.OneHotEncoding("SEX")
                 .Append(mlContext.Transforms.Categorical.OneHotEncoding("GRADE"))
                 .Append(mlContext.Transforms.Categorical.OneHotEncoding("WAS_TRAINEE"))
                 .Append(mlContext.Transforms.Concatenate("Features", inputFeatureNames))
                 .Append(mlContext.Transforms.NormalizeMinMax("Features"))
-                .Append(mlContext.MulticlassClassification.Trainers.OneVersusAll(
-                    binaryEstimator: mlContext.BinaryClassification.Trainers.FastTree(),
-                    labelColumnName: "Label"))
-                .Append(mlContext.Transforms.Conversion.MapKeyToValue("PredictedLabel"));
+                .Append(mlContext.BinaryClassification.Trainers.FastTree());
 
             return pipeline.Fit(trainData);
         }
 
+
         public void EvaluateModel(ITransformer model, IDataView testData, MLContext mlContext)
         {
             var predictions = model.Transform(testData);
-            var metrics = mlContext.MulticlassClassification.Evaluate(predictions);
+            var metrics = mlContext.BinaryClassification.Evaluate(predictions);
 
             Console.WriteLine("\nОЦЕНКА МОДЕЛИ:");
-            Console.WriteLine($"Macro Accuracy: {metrics.MacroAccuracy:P2}");
-            Console.WriteLine($"Micro Accuracy: {metrics.MicroAccuracy:P2}");
-            Console.WriteLine($"Log Loss: {metrics.LogLoss:F4}");
+            Console.WriteLine($"Accuracy: {metrics.Accuracy:P2}");
+            Console.WriteLine($"AUC: {metrics.AreaUnderRocCurve:P2}");
+            Console.WriteLine($"F1 Score: {metrics.F1Score:P2}");
         }
 
-        public void ShowFeatureImportance(ITransformer model, IDataView trainData, MLContext mlContext)
+        public void ShowFeatureImportance(ITransformer model)
         {
-            Console.WriteLine("\nВАЖНОСТЬ ПРИЗНАКОВ:");
+            var predictor = model as BinaryPredictionTransformer<FastTreeBinaryModelParameters>;
 
-            var permutationMetrics = mlContext.MulticlassClassification
-                .PermutationFeatureImportance(
-                    model,
-                    trainData,
-                    labelColumnName: "Label",
-                    permutationCount: 3);
-
-            var metricList = permutationMetrics.ToList();
-
-            if (inputFeatureNames.Length != metricList.Count)
+            if (predictor?.Model is FastTreeBinaryModelParameters treeModel)
             {
-                throw new InvalidOperationException("Размерность признаков не совпадает с размерностью важностей.");
-            }
+                VBuffer<float> weights = default;
+                treeModel.GetFeatureWeights(ref weights);
 
-            var importances = metricList
-                .Select((MulticlassClassificationMetrics v, int index) => new
+                var featureImportance = weights.GetValues().ToArray()
+                    .Select((w, i) => new { Feature = inputFeatureNames[i], Weight = Math.Abs(w) })
+                    .OrderByDescending(x => x.Weight)
+                    .ToList();
+
+                Console.WriteLine("\nВАЖНОСТЬ ПРИЗНАКОВ:");
+                foreach (var item in featureImportance)
                 {
-                    Feature = inputFeatureNames[index],
-                    Importance = Math.Abs((double)v.MicroAccuracy.Mean)
-                })
-                .OrderByDescending(x => x.Importance)
-                .ToList();
-
-            double totalImportance = importances.Sum(x => x.Importance);
-
-            foreach (var item in importances)
+                    Console.WriteLine($"🔹 {item.Feature}: {item.Weight:F4}");
+                }
+            }
+            else
             {
-                double percent = totalImportance == 0 ? 0 : item.Importance / totalImportance * 100.0;
-                Console.WriteLine($"🔹 {item.Feature}: {percent:F2}%");
+                Console.WriteLine("Модель не поддерживает анализ важности признаков");
             }
         }
+
+
 
         public void TestHypotheses(IDataView data, MLContext mlContext)
         {

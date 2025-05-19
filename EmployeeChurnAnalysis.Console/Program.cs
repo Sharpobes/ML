@@ -14,7 +14,7 @@ namespace EmployeeChurnAnalysis.Console
         {
             System.Console.WriteLine("===== Анализ оттока сотрудников =====");
 
-            var dataPath = @"E:\hakaton_tele2\IT HUB Data\csv\final_employees_filtered.csv";
+            var dataPath = @"C:\Users\lozik\Downloads\umneishiy\umneishiy\IT HUB Data\csv\final_employees_filtered.csv";
             var modelPath = Path.Combine(Environment.CurrentDirectory, "Models", "ChurnModel.zip");
 
             Directory.CreateDirectory(Path.GetDirectoryName(modelPath));
@@ -32,8 +32,8 @@ namespace EmployeeChurnAnalysis.Console
 
                 var predictor = new ChurnPredictor();
                 var ovaModel = predictor.TrainModel(split.TrainSet, mlContext);
-                predictor.ShowFeatureImportance(ovaModel, split.TrainSet, mlContext);
-                predictor.ShowFeatureImportance(ovaModel, split.TrainSet, mlContext);
+                predictor.ShowFeatureImportance(ovaModel);
+                predictor.ShowFeatureImportance(ovaModel);
                 predictor.TestHypotheses(split.TrainSet, mlContext);
                 predictor.SaveModel(ovaModel, mlContext, modelPath, split.TrainSet.Schema);
                 System.Console.WriteLine($"\nМодель сохранена в {modelPath}");

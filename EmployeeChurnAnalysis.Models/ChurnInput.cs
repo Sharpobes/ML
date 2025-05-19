@@ -25,6 +25,10 @@ namespace EmployeeChurnAnalysis.Models
         [LoadColumn(15)] public float COURSES_11;
         [LoadColumn(16)] public float COURSES_12;
 
-        [LoadColumn(17)] public string VOLUNTARY_TYPE;
+        [LoadColumn(17), ColumnName("Label")]
+        public bool IsVoluntary => VOLUNTARY_TYPE == "Voluntary";
+
+        [LoadColumn(17)]
+        public string VOLUNTARY_TYPE { get; set; }
     }
 }
