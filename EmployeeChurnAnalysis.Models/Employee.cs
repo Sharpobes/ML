@@ -59,5 +59,6 @@
         public DateTime? LeaveDate { get; set; }
         public string LeaveReason { get; set; } = string.Empty;
         public bool IsVoluntary { get; set; }
+        public bool Label => IsVoluntary;
     }
 }

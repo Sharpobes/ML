@@ -99,11 +99,23 @@ namespace EmployeeChurnAnalysis.Data
                 if (h.StartsWith("COURSES_"))
                 {
                     var val = csv.GetField(h);
-                    if (float.TryParse(val, NumberStyles.Any, CultureInfo.InvariantCulture, out float f)) sum += f;
+                    if (string.IsNullOrWhiteSpace(val))
+                    {
+                        sum += 0f;
+                    }
+                    else if (float.TryParse(val, NumberStyles.Any, CultureInfo.InvariantCulture, out float f))
+                    {
+                        sum += f;
+                    }
+                    else
+                    {
+                        sum += 0f;
+                    }
                 }
             }
             return sum;
         }
+
 
         private bool CalcLeftAfterBonus(string leaveDateStr)
         {

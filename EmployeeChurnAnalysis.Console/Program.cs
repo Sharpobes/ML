@@ -14,7 +14,7 @@ namespace EmployeeChurnAnalysis.Console
         {
             System.Console.WriteLine("===== Анализ оттока сотрудников =====");
 
-            var dataPath = @"C:\Users\lozik\Downloads\umneishiy\umneishiy\IT HUB Data\csv\final_employees_filtered.csv";
+            var dataPath = @"E:\hakaton_tele2\IT HUB Data\csv\final_employees_filtered.csv";
             var modelPath = Path.Combine(Environment.CurrentDirectory, "Models", "ChurnModel.zip");
 
             Directory.CreateDirectory(Path.GetDirectoryName(modelPath));

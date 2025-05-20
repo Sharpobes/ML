@@ -19,6 +19,18 @@ namespace EmployeeChurnAnalysis.Models
 
         public ITransformer TrainModel(IDataView trainData, MLContext mlContext)
         {
+            try
+            {
+                var preview = trainData.Preview();
+                foreach (var col in preview.Schema)
+                {
+                    Console.WriteLine($"{col.Name} — {col.Type}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Ошибка при предпросмотре данных: {ex.Message}");
+            }
             var pipeline = mlContext.Transforms.Categorical.OneHotEncoding("SEX")
                 .Append(mlContext.Transforms.Categorical.OneHotEncoding("GRADE"))
                 .Append(mlContext.Transforms.Categorical.OneHotEncoding("WAS_TRAINEE"))
@@ -78,8 +90,8 @@ namespace EmployeeChurnAnalysis.Models
             var trainees = rows.Where(r => r.WAS_TRAINEE == "YES").ToList();
             var nonTrainees = rows.Where(r => r.WAS_TRAINEE == "NO").ToList();
 
-            double voluntaryRateTrainee = trainees.Count(x => x.VOLUNTARY_TYPE == "Voluntary") / (double)Math.Max(1, trainees.Count);
-            double voluntaryRateNonTrainee = nonTrainees.Count(x => x.VOLUNTARY_TYPE == "Voluntary") / (double)Math.Max(1, nonTrainees.Count);
+            double voluntaryRateTrainee = trainees.Count(x => x.IsVoluntary) / (double)Math.Max(1, trainees.Count);
+            double voluntaryRateNonTrainee = nonTrainees.Count(x => x.IsVoluntary) / (double)Math.Max(1, nonTrainees.Count);
 
             Console.WriteLine($"Стажёры - добровольный уход:     {voluntaryRateTrainee:P2}");
             Console.WriteLine($"Не стажёры - добровольный уход: {voluntaryRateNonTrainee:P2}");
@@ -87,8 +99,8 @@ namespace EmployeeChurnAnalysis.Models
             var low = rows.Where(x => x.YEAR_2023 <= 2).ToList();
             var high = rows.Where(x => x.YEAR_2023 >= 4).ToList();
 
-            double lowRate = low.Count(x => x.VOLUNTARY_TYPE == "Voluntary") / (double)Math.Max(1, low.Count);
-            double highRate = high.Count(x => x.VOLUNTARY_TYPE == "Voluntary") / (double)Math.Max(1, high.Count);
+            double lowRate = low.Count(x => x.IsVoluntary) / (double)Math.Max(1, low.Count);
+            double highRate = high.Count(x => x.IsVoluntary) / (double)Math.Max(1, high.Count);
 
             Console.WriteLine($"\nСлабая оценка (≤2) - добровольный: {lowRate:P2}");
             Console.WriteLine($"Высокая оценка (≥4) - добровольный: {highRate:P2}");
